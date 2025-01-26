@@ -92,44 +92,28 @@ self.addEventListener("activate", (event) => {
 // The fetch handler redirects requests for RESOURCE files to the service
 // worker cache.
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  const url = new URL(event.request.url);
-  const origin = self.location.origin;
-  let key = url.pathname.substring(1);
-
-  // Redirigir a la página principal para rutas vacías
-  if (key === '' || url.pathname === '/') {
-    key = '/';
-  }
-
-  if (!RESOURCES[key]) {
-    return; // Ignorar recursos que no estén en el manifiesto
-  }
-
-  event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(event.request).then((response) => {
-        return (
-          response ||
-          fetch(event.request)
+  if (event.request.headers.get("range")) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((response) => {
+          if (response) {
+            return response;
+          }
+          return fetch(event.request)
             .then((networkResponse) => {
-              if (networkResponse.ok) {
-                cache.put(event.request, networkResponse.clone());
-              }
+              cache.put(event.request, networkResponse.clone());
               return networkResponse;
             })
             .catch(() => {
-              // Devuelve desde caché si no hay red
               return cache.match(event.request);
-            })
-        );
-      });
-    })
-  );
+            });
+        });
+      })
+    );
+    return;
+  }
 });
+
 
 
 self.addEventListener('message', (event) => {
