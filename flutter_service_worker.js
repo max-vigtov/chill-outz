@@ -61,14 +61,13 @@ self.addEventListener("install", (event) => {
 // During activate, the cache is populated with the temp files downloaded in
 // install. If this service worker is upgrading from one with a saved
 // MANIFEST, then use this to retain unchanged resource files.
-self.addEventListener("activate", function(event) {
-  return event.waitUntil(async function() {
+self.addEventListener("activate", (event) => {
+  event.waitUntil(async function() {
     try {
       var contentCache = await caches.open(CACHE_NAME);
       var tempCache = await caches.open(TEMP);
       var manifestCache = await caches.open(MANIFEST);
       var manifest = await manifestCache.match('manifest');
-      // When there is no prior manifest, clear the entire cache.
       if (!manifest) {
         await caches.delete(CACHE_NAME);
         contentCache = await caches.open(CACHE_NAME);
@@ -77,47 +76,19 @@ self.addEventListener("activate", function(event) {
           await contentCache.put(request, response);
         }
         await caches.delete(TEMP);
-        // Save the manifest to make future upgrades efficient.
         await manifestCache.put('manifest', new Response(JSON.stringify(RESOURCES)));
-        // Claim client to enable caching on first launch
         self.clients.claim();
         return;
       }
-      var oldManifest = await manifest.json();
-      var origin = self.location.origin;
-      for (var request of await contentCache.keys()) {
-        var key = request.url.substring(origin.length + 1);
-        if (key == "") {
-          key = "/";
-        }
-        // If a resource from the old manifest is not in the new cache, or if
-        // the MD5 sum has changed, delete it. Otherwise the resource is left
-        // in the cache and can be reused by the new service worker.
-        if (!RESOURCES[key] || RESOURCES[key] != oldManifest[key]) {
-          await contentCache.delete(request);
-        }
-      }
-      // Populate the cache with the app shell TEMP files, potentially overwriting
-      // cache files preserved above.
-      for (var request of await tempCache.keys()) {
-        var response = await tempCache.match(request);
-        await contentCache.put(request, response);
-      }
-      await caches.delete(TEMP);
-      // Save the manifest to make future upgrades efficient.
-      await manifestCache.put('manifest', new Response(JSON.stringify(RESOURCES)));
-      // Claim client to enable caching on first launch
-      self.clients.claim();
-      return;
     } catch (err) {
-      // On an unhandled exception the state of the cache cannot be guaranteed.
-      console.error('Failed to upgrade service worker: ' + err);
+      console.error('Failed to activate service worker: ', err);
       await caches.delete(CACHE_NAME);
       await caches.delete(TEMP);
       await caches.delete(MANIFEST);
     }
   }());
 });
+
 // The fetch handler redirects requests for RESOURCE files to the service
 // worker cache.
 self.addEventListener("fetch", (event) => {
@@ -126,37 +97,34 @@ self.addEventListener("fetch", (event) => {
   }
   var origin = self.location.origin;
   var key = event.request.url.substring(origin.length + 1);
-  // Redirect URLs to the index.html
+
+  // Redirigir URLs a index.html
   if (key.indexOf('?v=') != -1) {
     key = key.split('?v=')[0];
   }
   if (event.request.url == origin || event.request.url.startsWith(origin + '/#') || key == '') {
     key = '/';
   }
-  // If the URL is not the RESOURCE list then return to signal that the
-  // browser should take over.
+
+  // Solo manejar recursos declarados en RESOURCES
   if (!RESOURCES[key]) {
     return;
   }
-  // If the URL is the index.html, perform an online-first request.
-  if (key == '/') {
-    return onlineFirst(event);
-  }
-  event.respondWith(caches.open(CACHE_NAME)
-    .then((cache) =>  {
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((response) => {
-        // Either respond with the cached resource, or perform a fetch and
-        // lazily populate the cache only if the resource was successfully fetched.
         return response || fetch(event.request).then((response) => {
-          if (response && Boolean(response.ok)) {
+          if (response && response.ok) {
             cache.put(event.request, response.clone());
           }
           return response;
         });
-      })
+      });
     })
   );
 });
+
 self.addEventListener('message', (event) => {
   // SkipWaiting can be used to immediately activate a waiting service worker.
   // This will also require a page refresh triggered by the main worker.
