@@ -51,13 +51,13 @@ const CORE = [
 // During install, the TEMP cache is populated with the application shell files.
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  return event.waitUntil(
+  event.waitUntil(
     caches.open(TEMP).then((cache) => {
-      return cache.addAll(
-        CORE.map((value) => new Request(value, {'cache': 'reload'})));
+      return cache.addAll(Object.keys(RESOURCES).map((key) => new Request(key, { cache: 'reload' })));
     })
   );
 });
+
 // During activate, the cache is populated with the temp files downloaded in
 // install. If this service worker is upgrading from one with a saved
 // MANIFEST, then use this to retain unchanged resource files.
@@ -95,35 +95,42 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== 'GET') {
     return;
   }
-  var origin = self.location.origin;
-  var key = event.request.url.substring(origin.length + 1);
 
-  // Redirigir URLs a index.html
-  if (key.indexOf('?v=') != -1) {
-    key = key.split('?v=')[0];
-  }
-  if (event.request.url == origin || event.request.url.startsWith(origin + '/#') || key == '') {
+  const url = new URL(event.request.url);
+  const origin = self.location.origin;
+  let key = url.pathname.substring(1);
+
+  // Redirigir a la página principal para rutas vacías
+  if (key === '' || url.pathname === '/') {
     key = '/';
   }
 
-  // Solo manejar recursos declarados en RESOURCES
   if (!RESOURCES[key]) {
-    return;
+    return; // Ignorar recursos que no estén en el manifiesto
   }
 
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((response) => {
-        return response || fetch(event.request).then((response) => {
-          if (response && response.ok) {
-            cache.put(event.request, response.clone());
-          }
-          return response;
-        });
+        return (
+          response ||
+          fetch(event.request)
+            .then((networkResponse) => {
+              if (networkResponse.ok) {
+                cache.put(event.request, networkResponse.clone());
+              }
+              return networkResponse;
+            })
+            .catch(() => {
+              // Devuelve desde caché si no hay red
+              return cache.match(event.request);
+            })
+        );
       });
     })
   );
 });
+
 
 self.addEventListener('message', (event) => {
   // SkipWaiting can be used to immediately activate a waiting service worker.
