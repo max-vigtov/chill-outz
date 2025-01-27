@@ -52,11 +52,12 @@ const CORE = [
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(TEMP).then((cache) => {
-      return cache.addAll(Object.keys(RESOURCES).map((key) => new Request(key, { cache: 'reload' })));
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(Object.keys(RESOURCES));
     })
   );
 });
+
 
 // During activate, the cache is populated with the temp files downloaded in
 // install. If this service worker is upgrading from one with a saved
