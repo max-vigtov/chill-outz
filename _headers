@@ -1,0 +1,8 @@
+/*  
+  Cache-Control: public, max-age=0, must-revalidate
+
+/flutter_service-worker.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.json
+  Content-Type: application/json
