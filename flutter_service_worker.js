@@ -54,7 +54,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll([
-        "assets/assets/videos/video1.mp4",
+        ...CORE,
         Object.keys(RESOURCES)]);
     })
   );
